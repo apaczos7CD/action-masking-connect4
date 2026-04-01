@@ -9,6 +9,7 @@ from envs.connect4_wrapper import OneAgentVsRandomGym
 
 import argparse
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train Connect4 agent with PPO or MaskablePPO."
@@ -53,8 +54,6 @@ def parse_args():
     return parser.parse_args()
 
 
-args = parse_args()
-
 def mask_fn(env) -> np.ndarray:
     return env.action_masks()
 
@@ -67,49 +66,61 @@ def make_env(eval_seed: int, algo: str):
         return env
     return _factory
 
-# --- VEC ENV ---
-env_fns = [make_env(args.seed + i) for i in range(args.vec_env_n)]
-vec_env = DummyVecEnv(env_fns)
 
-# --- MODEL ---
-ModelCls = MaskablePPO if args.algo == "maskable_ppo" else PPO
+def create_model(algo: str, seed:int, vec_env: DummyVecEnv, n_steps: int, batch_size: int):
+    # --- MODEL ---
+    modelCls = MaskablePPO if algo == "maskable_ppo" else PPO
 
-model = ModelCls(
-    "MlpPolicy",
-    vec_env,
-    learning_rate=3e-4,
-    n_steps=args.n_steps,
-    batch_size=args.batch_size,
-    gamma=0.99,
-    gae_lambda=0.95,
-    clip_range=0.2,
-    ent_coef=0.01,
-    vf_coef=0.5,
-    max_grad_norm=0.5,
-    policy_kwargs=dict(net_arch=[64, 64]),
-    tensorboard_log="runs",
-    seed=args.seed,
-    verbose=1,
-)
+    model = modelCls(
+        "MlpPolicy",
+        vec_env,
+        learning_rate=3e-4,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
+        vf_coef=0.5,
+        max_grad_norm=0.5,
+        policy_kwargs=dict(net_arch=[64, 64]),
+        tensorboard_log="runs",
+        seed=seed,
+        verbose=1,
+    )
 
-checkpoint_callback = CheckpointCallback(
-    save_freq=args.n_steps,
-    save_path="checkpoints",
-    name_prefix=f"{args.algo}_connect4_seed{args.seed}",
-    save_replay_buffer=False,
-    save_vecnormalize=False,
-)
+    return model
 
-print(f"zapis co {checkpoint_callback.save_freq} kroków")
 
-# --- TRENING ---
-model.learn(
-    total_timesteps=args.steps,
-    callback=checkpoint_callback,
-    progress_bar=True,               # opcjonalnie
-)
+def main():
+    args = parse_args()
 
-# --- ZAPIS KOŃCOWY ---
-model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
+    env_fns = [make_env(args.seed + i, args.algo) for i in range(args.vec_env_n)]
+    vec_env = DummyVecEnv(env_fns)
 
-vec_env.close()
+    model = create_model(algo=args.algo, vec_env=vec_env, seed=args.seed, n_steps=args.n_steps, batch_size=args.batch_size)
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=args.n_steps,
+        save_path="checkpoints",
+        name_prefix=f"{args.algo}_connect4_seed{args.seed}",
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
+
+    print(f"zapis co {checkpoint_callback.save_freq} kroków")
+
+    # --- TRENING ---
+    model.learn(
+        total_timesteps=args.steps,
+        callback=checkpoint_callback,
+        progress_bar=True,               # opcjonalnie
+    )
+
+    # --- ZAPIS KOŃCOWY ---
+    model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
+
+    vec_env.close()
+
+if __name__ == "__main__":
+    main()
