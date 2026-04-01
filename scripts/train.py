@@ -1,3 +1,4 @@
+import numpy as np
 from stable_baselines3 import PPO
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -54,20 +55,17 @@ def parse_args():
 
 args = parse_args()
 
-def mask_fn(env):
-    # OneAgentVsRandomGym musi implementować action_masks() -> np.ndarray shape (7,)
+def mask_fn(env) -> np.ndarray:
     return env.action_masks()
 
-def make_env(env_seed: int):
-    def _f():
-        env = OneAgentVsRandomGym(seed=env_seed)
 
-        # Maskowanie najlepiej zakładać na *pojedyncze* env przed wektoryzacją
-        if args.algo == "maskable_ppo":
+def make_env(eval_seed: int, algo: str):
+    def _factory():
+        env = OneAgentVsRandomGym(seed=eval_seed)
+        if algo == "maskable_ppo":
             env = ActionMasker(env, mask_fn)
-
         return env
-    return _f
+    return _factory
 
 # --- VEC ENV ---
 env_fns = [make_env(args.seed + i) for i in range(args.vec_env_n)]
@@ -112,6 +110,6 @@ model.learn(
 )
 
 # --- ZAPIS KOŃCOWY ---
-model.save(f"{args.algo}_connect4_final_seed{args.seed}")
+model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
 
 vec_env.close()

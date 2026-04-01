@@ -1,4 +1,3 @@
-import sys
 import re
 import csv
 import math
@@ -7,10 +6,9 @@ from pathlib import Path
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.wrappers import ActionMasker
 from sb3_contrib.common.maskable.utils import get_action_masks
 
-from envs.connect4_wrapper import OneAgentVsRandomGym
+from train import make_env
 
 
 def parse_args():
@@ -70,19 +68,6 @@ def find_model_files(models_dir: str, algo: str, seed: int) -> list[tuple[int, P
 
     matched.sort(key=lambda x: x[0])
     return matched
-
-
-def mask_fn(env):
-    return env.action_masks()
-
-
-def make_env(eval_seed: int, algo: str):
-    def _factory():
-        env = OneAgentVsRandomGym(seed=eval_seed)
-        if algo == "maskable_ppo":
-            env = ActionMasker(env, mask_fn)
-        return env
-    return _factory
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.959963984540054) -> tuple[float, float]:
