@@ -27,30 +27,30 @@ def parse_args():
         default=0,
         help="Random seed.",
     )
-    parser.add_argument(
-        "--steps",
-        type=int,
-        default=200_000,
-        help="Total number of training timesteps.",
-    )
-    parser.add_argument(
-        "--vec-env-n",
-        type=int,
-        default=16,
-        help="Number of parallel environments.",
-    )
-    parser.add_argument(
-        "--n-steps",
-        type=int,
-        default=1_024,
-        help="N steps.",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1_024,
-        help="batch size.",
-    )
+    # parser.add_argument(
+    #     "--steps",
+    #     type=int,
+    #     default=200_000,
+    #     help="Total number of training timesteps.",
+    # )
+    # parser.add_argument(
+    #     "--vec-env-n",
+    #     type=int,
+    #     default=16,
+    #     help="Number of parallel environments.",
+    # )
+    # parser.add_argument(
+    #     "--n-steps",
+    #     type=int,
+    #     default=1_024,
+    #     help="N steps.",
+    # )
+    # parser.add_argument(
+    #     "--batch-size",
+    #     type=int,
+    #     default=1_024,
+    #     help="batch size.",
+    # )
     return parser.parse_args()
 
 
@@ -67,7 +67,7 @@ def make_env(eval_seed: int, algo: str):
     return _factory
 
 
-def create_model(algo: str, seed:int, vec_env: DummyVecEnv, n_steps: int, batch_size: int):
+def create_model(algo: str, seed:int, vec_env: DummyVecEnv):
     # --- MODEL ---
     modelCls = MaskablePPO if algo == "maskable_ppo" else PPO
 
@@ -75,8 +75,8 @@ def create_model(algo: str, seed:int, vec_env: DummyVecEnv, n_steps: int, batch_
         "MlpPolicy",
         vec_env,
         learning_rate=3e-4,
-        n_steps=n_steps,
-        batch_size=batch_size,
+        n_steps=64,
+        batch_size=64,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
@@ -95,13 +95,13 @@ def create_model(algo: str, seed:int, vec_env: DummyVecEnv, n_steps: int, batch_
 def main():
     args = parse_args()
 
-    env_fns = [make_env(args.seed + i, args.algo) for i in range(args.vec_env_n)]
+    env_fns = [make_env(args.seed + i, args.algo) for i in range(16)]
     vec_env = DummyVecEnv(env_fns)
 
-    model = create_model(algo=args.algo, vec_env=vec_env, seed=args.seed, n_steps=args.n_steps, batch_size=args.batch_size)
+    model = create_model(algo=args.algo, vec_env=vec_env, seed=args.seed)
 
     checkpoint_callback = CheckpointCallback(
-        save_freq=args.n_steps,
+        save_freq=1024,
         save_path="checkpoints",
         name_prefix=f"{args.algo}_connect4_seed{args.seed}",
         save_replay_buffer=False,
@@ -112,13 +112,13 @@ def main():
 
     # --- TRENING ---
     model.learn(
-        total_timesteps=args.steps,
+        total_timesteps=32768,
         callback=checkpoint_callback,
         progress_bar=True,               # opcjonalnie
     )
 
     # --- ZAPIS KOŃCOWY ---
-    model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
+    # model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
 
     vec_env.close()
 

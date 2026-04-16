@@ -28,24 +28,24 @@ def parse_args():
         required=True,
         help="Training seed used in checkpoint filenames, e.g. seed0.",
     )
-    parser.add_argument(
-        "--eval-seed",
-        type=int,
-        default=0,
-        help="Evaluation seed used to initialize env RNG.",
-    )
-    parser.add_argument(
-        "--n-games",
-        type=int,
-        default=1000,
-        help="Number of evaluation games per checkpoint.",
-    )
-    parser.add_argument(
-        "--models-dir",
-        type=str,
-        default="checkpoints",
-        help="Directory containing checkpoint .zip files.",
-    )
+    # parser.add_argument(
+    #     "--eval-seed",
+    #     type=int,
+    #     default=0,
+    #     help="Evaluation seed used to initialize env RNG.",
+    # )
+    # parser.add_argument(
+    #     "--n-games",
+    #     type=int,
+    #     default=1000,
+    #     help="Number of evaluation games per checkpoint.",
+    # )
+    # parser.add_argument(
+    #     "--models-dir",
+    #     type=str,
+    #     default="checkpoints",
+    #     help="Directory containing checkpoint .zip files.",
+    # )
     return parser.parse_args()
 
 
@@ -152,7 +152,7 @@ def main():
     args = parse_args()
 
     model_files = find_model_files(
-        models_dir=args.models_dir,
+        models_dir="checkpoints",
         algo=args.algo,
         seed=args.seed,
     )
@@ -160,7 +160,7 @@ def main():
     if not model_files:
         raise FileNotFoundError(
             f"No checkpoint files found for pattern: "
-            f"{args.algo}_connect4_seed{args.seed}_*_steps.zip in {args.models_dir}"
+            f"{args.algo}_connect4_seed{args.seed}_*_steps.zip in checkpoints"
         )
 
     rows = []
@@ -170,14 +170,14 @@ def main():
     for step, model_path in model_files:
         print(f"Evaluating step={step} | file={model_path.name}")
 
-        vec_env = DummyVecEnv([make_env(args.eval_seed, args.algo)])
+        vec_env = DummyVecEnv([make_env(args.seed, args.algo)])
         model = load_model(str(model_path), args.algo, vec_env)
 
         wins, games = evaluate(
             model=model,
             vec_env=vec_env,
             algo=args.algo,
-            n_games=args.n_games,
+            n_games=1000,
         )
 
         win_rate = wins / games if games > 0 else 0.0
@@ -201,7 +201,7 @@ def main():
 
         vec_env.close()
 
-    csv_out = Path("results") / f"eval_{args.algo}_seed{args.seed}_evalseed{args.eval_seed}.csv"
+    csv_out = Path("results") / f"eval_{args.algo}_seed{args.seed}.csv"
     save_rows_csv(rows, str(csv_out))
 
     print("\nDone.")
