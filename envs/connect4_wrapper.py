@@ -17,19 +17,18 @@ class OneAgentVsRandomGym(gym.Env):
         self._terminal_override = False  # terminal po nielegalnej akcji
 
     def reset(self, *, seed: int | None = None, options=None):
-        # obsłuż seed deterministycznie jak w Gymnasium
         if seed is not None:
             self._rng = np.random.RandomState(seed)
         self._terminal_override = False
-        self._pz.reset(seed=seed)   # PettingZoo reset MUSI być zawsze
-        self._advance_to_my_turn()  # doprowadź do tury mojego agenta
+        self._pz.reset(seed=seed)
+        self._advance_to_my_turn()
         return self._obs(), {}
 
 
     def step(self, action: int):
         if self._terminal_override:
             raise RuntimeError("Env jest terminalny; wywołaj reset().")
-    # 1) nielegalny ruch => natychmiastowa porażka −1
+        # 1) nielegalny ruch => natychmiastowa porażka −1
         mask = self.action_masks()
         if not bool(mask[action]):
             self._terminal_override = True
