@@ -8,7 +8,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
 
-from train import make_env
+from scripts.train import make_env
 
 
 def parse_args():
@@ -18,16 +18,16 @@ def parse_args():
     parser.add_argument(
         "--algo",
         type=str,
-        required=True,
         choices=["ppo", "maskable_ppo"],
+        default="ppo",
         help="Algorithm used in checkpoint filenames.",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        required=True,
-        help="Training seed used in checkpoint filenames, e.g. seed0.",
-    )
+    # parser.add_argument(
+    #     "--seed",
+    #     type=int,
+    #     default=0,
+    #     help="Training seed used in checkpoint filenames, e.g. seed0.",
+    # )
     # parser.add_argument(
     #     "--eval-seed",
     #     type=int,
@@ -150,62 +150,62 @@ def save_rows_csv(rows: list[dict], csv_path: str):
 
 def main():
     args = parse_args()
-
-    model_files = find_model_files(
-        models_dir="checkpoints",
-        algo=args.algo,
-        seed=args.seed,
-    )
-
-    if not model_files:
-        raise FileNotFoundError(
-            f"No checkpoint files found for pattern: "
-            f"{args.algo}_connect4_seed{args.seed}_*_steps.zip in checkpoints"
-        )
-
-    rows = []
-
-    print(f"Found {len(model_files)} checkpoint(s).")
-
-    for step, model_path in model_files:
-        print(f"Evaluating step={step} | file={model_path.name}")
-
-        vec_env = DummyVecEnv([make_env(args.seed, args.algo)])
-        model = load_model(str(model_path), args.algo, vec_env)
-
-        wins, games = evaluate(
-            model=model,
-            vec_env=vec_env,
+    for seed in range(0, 3):
+        model_files = find_model_files(
+            models_dir="checkpoints",
             algo=args.algo,
-            n_games=1000,
+            seed=seed,
         )
 
-        win_rate = wins / games if games > 0 else 0.0
-        ci_low, ci_high = wilson_interval(wins, games)
+        if not model_files:
+            raise FileNotFoundError(
+                f"No checkpoint files found for pattern: "
+                f"{args.algo}_connect4_seed{seed}_*_steps.zip in checkpoints"
+            )
 
-        rows.append({
-            "step": step,
-            "wins": wins,
-            "games": games,
-            "win_rate": f"{win_rate:.6f}",
-            "ci_low": f"{ci_low:.6f}",
-            "ci_high": f"{ci_high:.6f}",
-            "algo": args.algo,
-            "seed": args.seed,
-        })
+        rows = []
 
-        print(
-            f"  wins={wins}, games={games}, "
-            f"win_rate={win_rate:.6f}, ci_95=[{ci_low:.6f}, {ci_high:.6f}]"
-        )
+        print(f"Found {len(model_files)} checkpoint(s).")
 
-        vec_env.close()
+        for step, model_path in model_files:
+            print(f"Evaluating step={step} | file={model_path.name}")
 
-    csv_out = Path("results") / f"eval_{args.algo}_seed{args.seed}.csv"
-    save_rows_csv(rows, str(csv_out))
+            vec_env = DummyVecEnv([make_env(seed*1000, args.algo)])
+            model = load_model(str(model_path), args.algo, vec_env)
 
-    print("\nDone.")
-    print(f"Saved {len(rows)} row(s) to: {csv_out}")
+            wins, games = evaluate(
+                model=model,
+                vec_env=vec_env,
+                algo=args.algo,
+                n_games=1000,
+            )
+
+            win_rate = wins / games if games > 0 else 0.0
+            ci_low, ci_high = wilson_interval(wins, games)
+
+            rows.append({
+                "step": step,
+                "wins": wins,
+                "games": games,
+                "win_rate": f"{win_rate:.6f}",
+                "ci_low": f"{ci_low:.6f}",
+                "ci_high": f"{ci_high:.6f}",
+                "algo": args.algo,
+                "seed": seed,
+            })
+
+            print(
+                f"  wins={wins}, games={games}, "
+                f"win_rate={win_rate:.6f}, ci_95=[{ci_low:.6f}, {ci_high:.6f}]"
+            )
+
+            vec_env.close()
+
+        csv_out = Path("results") / f"eval_{args.algo}_seed{seed}.csv"
+        save_rows_csv(rows, str(csv_out))
+
+        print("\nDone.")
+        print(f"Saved {len(rows)} row(s) to: {csv_out}")
 
 if __name__ == "__main__":
     main()

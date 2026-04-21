@@ -44,11 +44,48 @@ plt.figure(figsize=(10, 6))
 
 for algo_name, group in df.groupby("algo"):
     group = group.sort_values(by="step")
-    plt.plot(group["step"], group["wins"], marker="o", label=algo_name)
+
+    # Główna linia win_rate
+    line, = plt.plot(
+        group["step"],
+        group["win_rate"],
+        marker="o",
+        label=algo_name
+    )
+
+    color = line.get_color()
+
+    # Linie CI
+    plt.plot(
+        group["step"],
+        group["ci_low"],
+        linestyle="--",
+        linewidth=1,
+        color=color,
+        alpha=0.8
+    )
+
+    plt.plot(
+        group["step"],
+        group["ci_high"],
+        linestyle="--",
+        linewidth=1,
+        color=color,
+        alpha=0.8
+    )
+
+    # Wypełnienie między ci_low i ci_high
+    plt.fill_between(
+        group["step"],
+        group["ci_low"],
+        group["ci_high"],
+        color=color,
+        alpha=0.15
+    )
 
 plt.xlabel("step")
-plt.ylabel("wins")
-plt.title("Wins vs step")
+plt.ylabel("win_rate")
+plt.title("win_rate vs step")
 plt.legend(title="algo")
 plt.grid(True, alpha=0.3)
 plt.tight_layout()

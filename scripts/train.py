@@ -21,12 +21,12 @@ def parse_args():
         default="ppo",
         help="Algorithm to use.",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Random seed.",
-    )
+    # parser.add_argument(
+    #     "--seed",
+    #     type=int,
+    #     default=0,
+    #     help="Random seed.",
+    # )
     # parser.add_argument(
     #     "--steps",
     #     type=int,
@@ -95,32 +95,30 @@ def create_model(algo: str, seed:int, vec_env: DummyVecEnv):
 def main():
     args = parse_args()
 
-    env_fns = [make_env(args.seed + i, args.algo) for i in range(16)]
-    vec_env = DummyVecEnv(env_fns)
+    for seed in range(0,3):
+        env_fns = [make_env(seed + i*10, args.algo) for i in range(4)]
+        vec_env = DummyVecEnv(env_fns)
 
-    model = create_model(algo=args.algo, vec_env=vec_env, seed=args.seed)
+        model = create_model(algo=args.algo, vec_env=vec_env, seed=seed)
 
-    checkpoint_callback = CheckpointCallback(
-        save_freq=1024,
-        save_path="checkpoints",
-        name_prefix=f"{args.algo}_connect4_seed{args.seed}",
-        save_replay_buffer=False,
-        save_vecnormalize=False,
-    )
+        checkpoint_callback = CheckpointCallback(
+            save_freq=64,
+            save_path="checkpoints",
+            name_prefix=f"{args.algo}_connect4_seed{seed}",
+            save_replay_buffer=False,
+            save_vecnormalize=False,
+        )
 
-    print(f"zapis co {checkpoint_callback.save_freq} kroków")
+        print(f"zapis co {checkpoint_callback.save_freq} kroków")
 
-    # --- TRENING ---
-    model.learn(
-        total_timesteps=32768,
-        callback=checkpoint_callback,
-        progress_bar=True,               # opcjonalnie
-    )
+        # --- TRENING ---
+        model.learn(
+            total_timesteps=16384,
+            callback=checkpoint_callback,
+            progress_bar=True,               # opcjonalnie
+        )
 
-    # --- ZAPIS KOŃCOWY ---
-    # model.save(f"checkpoints\\{args.algo}_connect4_final_seed{args.seed}")
-
-    vec_env.close()
+        vec_env.close()
 
 if __name__ == "__main__":
     main()
