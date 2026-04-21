@@ -1,73 +1,47 @@
 import re
 import csv
 import math
-import argparse
 from pathlib import Path
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
+from __future__ import annotations
 
 from scripts.train import make_env
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Evaluate all Connect4 checkpoints vs uniform-random-legal opponent."
-    )
-    parser.add_argument(
-        "--algo",
-        type=str,
-        choices=["ppo", "maskable_ppo"],
-        default="ppo",
-        help="Algorithm used in checkpoint filenames.",
-    )
-    # parser.add_argument(
-    #     "--seed",
-    #     type=int,
-    #     default=0,
-    #     help="Training seed used in checkpoint filenames, e.g. seed0.",
-    # )
-    # parser.add_argument(
-    #     "--eval-seed",
-    #     type=int,
-    #     default=0,
-    #     help="Evaluation seed used to initialize env RNG.",
-    # )
-    # parser.add_argument(
-    #     "--n-games",
-    #     type=int,
-    #     default=1000,
-    #     help="Number of evaluation games per checkpoint.",
-    # )
-    # parser.add_argument(
-    #     "--models-dir",
-    #     type=str,
-    #     default="checkpoints",
-    #     help="Directory containing checkpoint .zip files.",
-    # )
-    return parser.parse_args()
+MODEL_RE = re.compile(
+    r"^(?P<algo>.+?)_connect4_seed(?P<seed>\d+)_(?P<step>\d+)_steps\.zip$"
+)
 
 
-def extract_step(model_path: Path) -> int | None:
-    match = re.search(r"_(\d+)_steps\.zip$", model_path.name)
-    if match:
-        return int(match.group(1))
-    return None
+def parse_model_file(model_path: Path) -> tuple[str, int, int] | None:
+    match = MODEL_RE.match(model_path.name)
+    if not match:
+        return None
+
+    algo = match.group("algo")
+    seed = int(match.group("seed"))
+    step = int(match.group("step"))
+    return algo, step, seed
 
 
-def find_model_files(models_dir: str, algo: str, seed: int) -> list[tuple[int, Path]]:
+def find_model_files(models_dir: str) -> list[tuple[str, int, int, Path]]:
     models_path = Path(models_dir)
-    pattern = f"{algo}_connect4_seed{seed}_*_steps.zip"
+    matched: list[tuple[str, int, int, Path]] = []
 
-    matched = []
-    for path in models_path.glob(pattern):
-        step = extract_step(path)
-        if step is not None:
-            matched.append((step, path))
+    for path in models_path.glob("*.zip"):
+        parsed = parse_model_file(path)
+        if parsed is None:
+            continue
 
-    matched.sort(key=lambda x: x[0])
+        algo, step, seed = parsed
+        matched.append((algo, step, seed, path))
+
+    matched.sort(key=lambda x: (x[0], x[1], x[2]))
     return matched
+
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.959963984540054) -> tuple[float, float]:
@@ -149,63 +123,54 @@ def save_rows_csv(rows: list[dict], csv_path: str):
 
 
 def main():
-    args = parse_args()
-    for seed in range(0, 3):
-        model_files = find_model_files(
-            models_dir="checkpoints",
-            algo=args.algo,
-            seed=seed,
+    model_files = find_model_files(models_dir="checkpoints")
+
+    if not model_files:
+        raise FileNotFoundError("No models files found")
+
+    print(f"Found {len(model_files)} models.")
+
+    rows = []
+
+    for algo, step, seed, model_path in model_files:
+        print(f"Evaluating step={step} | file={model_path.name}")
+
+        vec_env = DummyVecEnv([make_env(seed*1000, algo)])
+        model = load_model(str(model_path), algo, vec_env)
+
+        wins, games = evaluate(
+            model=model,
+            vec_env=vec_env,
+            algo=algo,
+            n_games=1000,
         )
 
-        if not model_files:
-            raise FileNotFoundError(
-                f"No checkpoint files found for pattern: "
-                f"{args.algo}_connect4_seed{seed}_*_steps.zip in checkpoints"
-            )
+        win_rate = wins / games if games > 0 else 0.0
+        ci_low, ci_high = wilson_interval(wins, games)
 
-        rows = []
+        rows.append({
+            "step": step,
+            "wins": wins,
+            "games": games,
+            "win_rate": f"{win_rate:.6f}",
+            "ci_low": f"{ci_low:.6f}",
+            "ci_high": f"{ci_high:.6f}",
+            "algo": algo,
+            "seed": seed,
+        })
 
-        print(f"Found {len(model_files)} checkpoint(s).")
+        print(
+            f"  wins={wins}, games={games}, "
+            f"win_rate={win_rate:.6f}, ci_95=[{ci_low:.6f}, {ci_high:.6f}]"
+        )
 
-        for step, model_path in model_files:
-            print(f"Evaluating step={step} | file={model_path.name}")
+        vec_env.close()
 
-            vec_env = DummyVecEnv([make_env(seed*1000, args.algo)])
-            model = load_model(str(model_path), args.algo, vec_env)
+    csv_out = Path("results") / f"eval_{algo}_seed{seed}.csv"
+    save_rows_csv(rows, str(csv_out))
 
-            wins, games = evaluate(
-                model=model,
-                vec_env=vec_env,
-                algo=args.algo,
-                n_games=1000,
-            )
-
-            win_rate = wins / games if games > 0 else 0.0
-            ci_low, ci_high = wilson_interval(wins, games)
-
-            rows.append({
-                "step": step,
-                "wins": wins,
-                "games": games,
-                "win_rate": f"{win_rate:.6f}",
-                "ci_low": f"{ci_low:.6f}",
-                "ci_high": f"{ci_high:.6f}",
-                "algo": args.algo,
-                "seed": seed,
-            })
-
-            print(
-                f"  wins={wins}, games={games}, "
-                f"win_rate={win_rate:.6f}, ci_95=[{ci_low:.6f}, {ci_high:.6f}]"
-            )
-
-            vec_env.close()
-
-        csv_out = Path("results") / f"eval_{args.algo}_seed{seed}.csv"
-        save_rows_csv(rows, str(csv_out))
-
-        print("\nDone.")
-        print(f"Saved {len(rows)} row(s) to: {csv_out}")
+    print("\nDone.")
+    print(f"Saved {len(rows)} row(s) to: {csv_out}")
 
 if __name__ == "__main__":
     main()

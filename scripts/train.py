@@ -21,36 +21,6 @@ def parse_args():
         default="ppo",
         help="Algorithm to use.",
     )
-    # parser.add_argument(
-    #     "--seed",
-    #     type=int,
-    #     default=0,
-    #     help="Random seed.",
-    # )
-    # parser.add_argument(
-    #     "--steps",
-    #     type=int,
-    #     default=200_000,
-    #     help="Total number of training timesteps.",
-    # )
-    # parser.add_argument(
-    #     "--vec-env-n",
-    #     type=int,
-    #     default=16,
-    #     help="Number of parallel environments.",
-    # )
-    # parser.add_argument(
-    #     "--n-steps",
-    #     type=int,
-    #     default=1_024,
-    #     help="N steps.",
-    # )
-    # parser.add_argument(
-    #     "--batch-size",
-    #     type=int,
-    #     default=1_024,
-    #     help="batch size.",
-    # )
     return parser.parse_args()
 
 
