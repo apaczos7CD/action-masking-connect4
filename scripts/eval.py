@@ -1,15 +1,14 @@
 import re
 import csv
 import math
+from collections import defaultdict
 from pathlib import Path
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
-from __future__ import annotations
 
 from scripts.train import make_env
-
 
 MODEL_RE = re.compile(
     r"^(?P<algo>.+?)_connect4_seed(?P<seed>\d+)_(?P<step>\d+)_steps\.zip$"
@@ -39,9 +38,10 @@ def find_model_files(models_dir: str) -> list[tuple[str, int, int, Path]]:
         algo, step, seed = parsed
         matched.append((algo, step, seed, path))
 
+    print(f"Found {len(matched)} models.")
+
     matched.sort(key=lambda x: (x[0], x[1], x[2]))
     return matched
-
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.959963984540054) -> tuple[float, float]:
@@ -69,7 +69,7 @@ def load_model(model_path: str, algo: str, vec_env: DummyVecEnv):
     raise ValueError(f"Unsupported algo: {algo}")
 
 
-def evaluate(model, vec_env: DummyVecEnv, algo: str, n_games: int) -> tuple[int, int]:
+def run_n_games(model, vec_env: DummyVecEnv, algo: str, n_games: int) -> tuple[int, int]:
     wins = 0
     games = 0
 
@@ -101,19 +101,75 @@ def evaluate(model, vec_env: DummyVecEnv, algo: str, n_games: int) -> tuple[int,
     return wins, games
 
 
-def save_rows_csv(rows: list[dict], csv_path: str):
+def run_model(model_path, algo: str) -> tuple[int, int]:
+    eval_seed = 1000
+
+    vec_env = DummyVecEnv([make_env(eval_seed, algo)])
+    model = load_model(str(model_path), algo, vec_env)
+
+    wins, games = run_n_games(
+        model=model,
+        vec_env=vec_env,
+        algo=algo,
+        n_games=1000,
+    )
+
+    vec_env.close()
+
+    return wins, games
+
+
+def run_models(model_paths: list[tuple[str, int, int, Path]]) -> dict[tuple[str, int, int], dict[str, int]]:
+    results = {}
+    for algo, step, seed, model_path in model_paths:
+        print(f"Evaluating algo={algo} | step={step} | seed={seed} | file={model_path.name}")
+
+        wins, games = run_model(
+            model_path=model_path,
+            algo=algo
+        )
+
+        results[(algo, step, seed)] = {
+            "wins": wins,
+            "games": games,
+        }
+
+        print(f"wins={wins}, games={games}")
+
+    return results
+
+
+def calculate_results(results: dict[tuple[str, int, int], dict[str, int]]) -> dict[tuple[str, int], dict[str, float]]:
+    grouped = defaultdict(lambda: {"wins": 0, "games": 0})
+
+    for (algo, step, _seed), values in results.items():
+        grouped[(algo, step)]["wins"] += values["wins"]
+        grouped[(algo, step)]["games"] += values["games"]
+
+    calculated_results = {}
+
+    for (algo, step), values in grouped.items():
+        win_rate = values["wins"] / values["games"] if values["games"] > 0 else 0.0
+        ci_low, ci_high = wilson_interval(values["wins"], values["games"])
+        calculated_results[(algo, step)] ={
+            "win_rate": win_rate,
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+        }
+
+    return calculated_results
+
+
+def save_rows_csv(rows: list[dict], csv_path: str) -> None:
     csv_file = Path(csv_path)
     csv_file.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames = [
+        "algo",
         "step",
-        "wins",
-        "games",
         "win_rate",
         "ci_low",
         "ci_high",
-        "algo",
-        "seed",
     ]
 
     with csv_file.open("w", newline="", encoding="utf-8") as f:
@@ -122,55 +178,49 @@ def save_rows_csv(rows: list[dict], csv_path: str):
         writer.writerows(rows)
 
 
+from pathlib import Path
+
+
+def save_results(results: dict[tuple[str, int], dict[str, float]]) -> None:
+    rows_by_algo: dict[str, list[dict[str, str | int]]] = {}
+
+    for algo, step in sorted(results.keys(), key=lambda x: (x[0], x[1])):
+        values = results[(algo, step)]
+
+        if algo not in rows_by_algo:
+            rows_by_algo[algo] = []
+
+        rows_by_algo[algo].append({
+            "algo": algo,
+            "step": step,
+            "win_rate": f"{values['win_rate']:.6f}",
+            "ci_low": f"{values['ci_low']:.6f}",
+            "ci_high": f"{values['ci_high']:.6f}",
+        })
+
+    results_dir = Path("results")
+
+    for algo, rows in rows_by_algo.items():
+        csv_out = results_dir / f"eval_{algo}.csv"
+        save_rows_csv(rows, str(csv_out))
+        print(f"Saved {len(rows)} row(s) to: {csv_out}")
+
+
 def main():
+    # wyszukanie wytrenowanych modeli
     model_files = find_model_files(models_dir="checkpoints")
 
     if not model_files:
         raise FileNotFoundError("No models files found")
 
-    print(f"Found {len(model_files)} models.")
+    # ewaluacja modeli
+    results = run_models(model_files)
+    results_calculated = calculate_results(results)
 
-    rows = []
-
-    for algo, step, seed, model_path in model_files:
-        print(f"Evaluating step={step} | file={model_path.name}")
-
-        vec_env = DummyVecEnv([make_env(seed*1000, algo)])
-        model = load_model(str(model_path), algo, vec_env)
-
-        wins, games = evaluate(
-            model=model,
-            vec_env=vec_env,
-            algo=algo,
-            n_games=1000,
-        )
-
-        win_rate = wins / games if games > 0 else 0.0
-        ci_low, ci_high = wilson_interval(wins, games)
-
-        rows.append({
-            "step": step,
-            "wins": wins,
-            "games": games,
-            "win_rate": f"{win_rate:.6f}",
-            "ci_low": f"{ci_low:.6f}",
-            "ci_high": f"{ci_high:.6f}",
-            "algo": algo,
-            "seed": seed,
-        })
-
-        print(
-            f"  wins={wins}, games={games}, "
-            f"win_rate={win_rate:.6f}, ci_95=[{ci_low:.6f}, {ci_high:.6f}]"
-        )
-
-        vec_env.close()
-
-    csv_out = Path("results") / f"eval_{algo}_seed{seed}.csv"
-    save_rows_csv(rows, str(csv_out))
+    # zapis wynikow do csv
+    save_results(results_calculated)
 
     print("\nDone.")
-    print(f"Saved {len(rows)} row(s) to: {csv_out}")
 
 if __name__ == "__main__":
     main()

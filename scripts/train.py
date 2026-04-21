@@ -83,7 +83,7 @@ def main():
 
         # --- TRENING ---
         model.learn(
-            total_timesteps=16384,
+            total_timesteps=1024,
             callback=checkpoint_callback,
             progress_bar=True,               # opcjonalnie
         )
