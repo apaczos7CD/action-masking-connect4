@@ -1,0 +1,3 @@
+models_dir: "checkpoints"
+n_games: 1000
+eval_seed: 100
