@@ -1,7 +1,6 @@
 import re
 import csv
 import math
-from collections import defaultdict
 from pathlib import Path
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -132,8 +131,8 @@ def run_model(model_path: Path, algo: str, run_param) -> tuple[int, int]:
     return wins, games
 
 
-def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list[dict[str, int]]:
-    results: list[dict[str, int]] = []
+def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list[dict[str, str | int | float]]:
+    results: list[dict[str, str | int | float]] = []
     for algo, step, seed, model_path in model_paths:
         print(f"Evaluating algo={algo} | step={step} | seed={seed} | file={model_path.name}")
 
@@ -143,41 +142,27 @@ def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list
             run_param=run_param
         )
 
+        ci_low, ci_high = wilson_interval(wins, games)
+        win_rate = wins / games if games > 0 else 0.0
+
         results.append({
             "algo": algo,
             "step": step,
             "seed": seed,
-            "wins": wins,
             "games": games,
+            "wins": wins,
+            "win_rate": win_rate,
+            "ci_low": ci_low,
+            "ci_high": ci_high,
         })
 
         print(f"wins={wins}, games={games}")
+        print(f"win_rate={win_rate}, ci_low={ci_low}, ci_high={ci_high}")
 
     return results
 
 
-# def calculate_results(results: dict[tuple[str, int, int], dict[str, int]]) -> dict[tuple[str, int], dict[str, float]]:
-#     grouped = defaultdict(lambda: {"wins": 0, "games": 0})
-#
-#     for (algo, step, _seed), values in results.items():
-#         grouped[(algo, step)]["wins"] += values["wins"]
-#         grouped[(algo, step)]["games"] += values["games"]
-#
-#     calculated_results = {}
-#
-#     for (algo, step), values in grouped.items():
-#         win_rate = values["wins"] / values["games"] if values["games"] > 0 else 0.0
-#         ci_low, ci_high = wilson_interval(values["wins"], values["games"])
-#         calculated_results[(algo, step)] ={
-#             "win_rate": win_rate,
-#             "ci_low": ci_low,
-#             "ci_high": ci_high,
-#         }
-#
-#     return calculated_results
-
-
-def save_results(results: list[dict[str, int]], results_config) -> None:
+def save_results(results: list[dict[str, str | int | float]], results_config) -> None:
     results_path = Path(results_config["results_dir"]) / results_config["results_file"]
 
     fieldnames = list(results[0].keys())

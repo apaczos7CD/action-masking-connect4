@@ -1,5 +1,5 @@
 algo: ppo
-total_env_steps: 1024
+total_env_steps: 32768
 vec_env_n: 16
 seeds: [0, 1, 2]
 checkpoints_freq: 64
