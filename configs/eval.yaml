@@ -2,3 +2,6 @@ models_dir: "checkpoints"
 run_param:
  n_games: 1000
  eval_seed: 100
+results:
+ results_dir: "results"
+ results_file: "evals.csv"

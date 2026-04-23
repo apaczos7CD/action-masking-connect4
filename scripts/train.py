@@ -1,6 +1,7 @@
 from pathlib import Path
 import yaml
 import numpy as np
+import argparse
 from stable_baselines3 import PPO
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -8,8 +9,6 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from sb3_contrib.common.wrappers import ActionMasker
 
 from envs.connect4_wrapper import OneAgentVsRandomGym
-
-import argparse
 
 
 def parse_args():
@@ -97,6 +96,8 @@ def train_model(config):
 def main():
     args = parse_args()
     config = read_config(args.config)
+
+    #trening
     train_model(config)
 
 
