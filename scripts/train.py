@@ -1,3 +1,5 @@
+from pathlib import Path
+import yaml
 import numpy as np
 from stable_baselines3 import PPO
 from sb3_contrib import MaskablePPO
@@ -11,50 +13,53 @@ import argparse
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Train Connect4 agent with PPO or MaskablePPO."
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--algo",
-        type=str,
-        choices=["ppo", "maskable_ppo"],
-        default="ppo",
-        help="Algorithm to use.",
+        "--config",
+        type=Path,
+        default=Path("configs/train_ppo.yaml"),
+        help="Ścieżka do pliku YAML z konfiguracją",
     )
     return parser.parse_args()
+
+
+def read_config(config):
+    with open(config, "r") as f:
+        config = yaml.safe_load(f)
+    return config
 
 
 def mask_fn(env) -> np.ndarray:
     return env.action_masks()
 
 
-def make_env(eval_seed: int, algo: str):
+def make_env(seed: int, algo: str):
     def _factory():
-        env = OneAgentVsRandomGym(seed=eval_seed)
+        env = OneAgentVsRandomGym(seed=seed)
         if algo == "maskable_ppo":
             env = ActionMasker(env, mask_fn)
         return env
     return _factory
 
 
-def create_model(algo: str, seed:int, vec_env: DummyVecEnv):
+def create_model(algo: str, seed:int, vec_env: DummyVecEnv, model_param):
     # --- MODEL ---
     modelCls = MaskablePPO if algo == "maskable_ppo" else PPO
 
     model = modelCls(
-        "MlpPolicy",
+        model_param["policy"],
         vec_env,
-        learning_rate=3e-4,
-        n_steps=64,
-        batch_size=64,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        policy_kwargs=dict(net_arch=[64, 64]),
-        tensorboard_log="runs",
+        learning_rate=model_param["learning_rate"],
+        n_steps=model_param["n_steps"],
+        batch_size=model_param["batch_size"],
+        gamma=model_param["gamma"],
+        gae_lambda=model_param["gae_lambda"],
+        clip_range=model_param["clip_range"],
+        ent_coef=model_param["ent_coef"],
+        vf_coef=model_param["vf_coef"],
+        max_grad_norm=model_param["max_grad_norm"],
+        policy_kwargs=dict(net_arch=model_param["net_arch"]),
+        tensorboard_log=model_param["logs_dir"],
         seed=seed,
         verbose=1,
     )
@@ -62,19 +67,17 @@ def create_model(algo: str, seed:int, vec_env: DummyVecEnv):
     return model
 
 
-def main():
-    args = parse_args()
-
-    for seed in range(0,3):
-        env_fns = [make_env(seed + i*10, args.algo) for i in range(4)]
+def train_model(config):
+    for seed in config["seeds"]:
+        env_fns = [make_env(seed + i*10, config["algo"]) for i in range(config["vec_env_n"])]
         vec_env = DummyVecEnv(env_fns)
 
-        model = create_model(algo=args.algo, vec_env=vec_env, seed=seed)
+        model = create_model(algo=config["algo"], vec_env=vec_env, seed=seed, model_param=config["model_param"])
 
         checkpoint_callback = CheckpointCallback(
-            save_freq=64,
-            save_path="checkpoints",
-            name_prefix=f"{args.algo}_connect4_seed{seed}",
+            save_freq=config["checkpoints_freq"],
+            save_path=config["checkpoints_dir"],
+            name_prefix=f"{config["algo"]}_connect4_seed{seed}",
             save_replay_buffer=False,
             save_vecnormalize=False,
         )
@@ -83,12 +86,19 @@ def main():
 
         # --- TRENING ---
         model.learn(
-            total_timesteps=1024,
+            total_timesteps=config["total_env_steps"],
             callback=checkpoint_callback,
-            progress_bar=True,               # opcjonalnie
+            progress_bar=True,
         )
 
         vec_env.close()
+
+
+def main():
+    args = parse_args()
+    config = read_config(args.config)
+    train_model(config)
+
 
 if __name__ == "__main__":
     main()

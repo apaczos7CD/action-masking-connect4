@@ -7,12 +7,23 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
-
-from scripts.train import make_env
+import argparse
+from scripts.train import make_env, read_config
 
 MODEL_RE = re.compile(
     r"^(?P<algo>.+?)_connect4_seed(?P<seed>\d+)_(?P<step>\d+)_steps\.zip$"
 )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/eval.yaml"),
+        help="Ścieżka do pliku YAML z konfiguracją",
+    )
+    return parser.parse_args()
 
 
 def parse_model_file(model_path: Path) -> tuple[str, int, int] | None:
@@ -101,17 +112,15 @@ def run_n_games(model, vec_env: DummyVecEnv, algo: str, n_games: int) -> tuple[i
     return wins, games
 
 
-def run_model(model_path, algo: str) -> tuple[int, int]:
-    eval_seed = 1000
-
-    vec_env = DummyVecEnv([make_env(eval_seed, algo)])
+def run_model(model_path, algo: str, run_param) -> tuple[int, int]:
+    vec_env = DummyVecEnv([make_env(run_param["eval_seed"], algo)])
     model = load_model(str(model_path), algo, vec_env)
 
     wins, games = run_n_games(
         model=model,
         vec_env=vec_env,
         algo=algo,
-        n_games=1000,
+        n_games=run_param["n_games"],
     )
 
     vec_env.close()
@@ -119,14 +128,15 @@ def run_model(model_path, algo: str) -> tuple[int, int]:
     return wins, games
 
 
-def run_models(model_paths: list[tuple[str, int, int, Path]]) -> dict[tuple[str, int, int], dict[str, int]]:
+def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> dict[tuple[str, int, int], dict[str, int]]:
     results = {}
     for algo, step, seed, model_path in model_paths:
         print(f"Evaluating algo={algo} | step={step} | seed={seed} | file={model_path.name}")
 
         wins, games = run_model(
             model_path=model_path,
-            algo=algo
+            algo=algo,
+            run_param=run_param
         )
 
         results[(algo, step, seed)] = {
@@ -178,9 +188,6 @@ def save_rows_csv(rows: list[dict], csv_path: str) -> None:
         writer.writerows(rows)
 
 
-from pathlib import Path
-
-
 def save_results(results: dict[tuple[str, int], dict[str, float]]) -> None:
     rows_by_algo: dict[str, list[dict[str, str | int]]] = {}
 
@@ -207,14 +214,17 @@ def save_results(results: dict[tuple[str, int], dict[str, float]]) -> None:
 
 
 def main():
+    args = parse_args()
+    config = read_config(args.config)
+
     # wyszukanie wytrenowanych modeli
-    model_files = find_model_files(models_dir="checkpoints")
+    model_files = find_model_files(config["models_dir"])
 
     if not model_files:
         raise FileNotFoundError("No models files found")
 
     # ewaluacja modeli
-    results = run_models(model_files)
+    results = run_models(model_files, config["run_param"])
     results_calculated = calculate_results(results)
 
     # zapis wynikow do csv
