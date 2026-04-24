@@ -1,0 +1,5 @@
+results_dir: "results"
+results_file: "evals.csv"
+show_wilson_interval: False
+show_algo: ["ppo","maskable_ppo"]
+show_seeds: [0,1,2]

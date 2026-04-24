@@ -9,6 +9,7 @@ from sb3_contrib.common.maskable.utils import get_action_masks
 import argparse
 from scripts.train import make_env, read_config
 
+Result = dict[str, str | int | float]
 MODEL_RE = re.compile(
     r"^(?P<algo>.+?)_connect4_seed(?P<seed>\d+)_(?P<step>\d+)_steps\.zip$"
 )
@@ -131,8 +132,8 @@ def run_model(model_path: Path, algo: str, run_param) -> tuple[int, int]:
     return wins, games
 
 
-def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list[dict[str, str | int | float]]:
-    results: list[dict[str, str | int | float]] = []
+def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list[Result]:
+    results: list[Result] = []
     for algo, step, seed, model_path in model_paths:
         print(f"Evaluating algo={algo} | step={step} | seed={seed} | file={model_path.name}")
 
@@ -162,7 +163,7 @@ def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list
     return results
 
 
-def save_results(results: list[dict[str, str | int | float]], results_config) -> None:
+def save_results(results: list[Result], results_config) -> None:
     results_path = Path(results_config["results_dir"]) / results_config["results_file"]
 
     fieldnames = list(results[0].keys())

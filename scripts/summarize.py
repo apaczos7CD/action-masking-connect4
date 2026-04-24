@@ -1,59 +1,111 @@
-from typing import Optional
-from scripts.plot import parse_args, load_results_csv, group_results, Row, GroupKey
+import csv
+from collections import defaultdict
+from pathlib import Path
+import argparse
+from scripts.train import read_config
+from scripts.eval import Result
+
+SummaryRow = dict[str, str | int | float | None]
+GroupedResults = dict[tuple[str, int], list[Result]]
 
 
-ThresholdSummaryRow = dict[str, str | int | float | None]
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/summarize.yaml"),
+        help="Ścieżka do pliku config.",
+    )
+    return parser.parse_args()
 
 
-def first_step_at_or_above(
-    rows: list[Row],
-    metric: str,
-    threshold: float = 0.9,
-) -> int | None:
-    """
-    Zwraca najmniejszy step, dla którego dana metryka osiąga co najmniej threshold.
-    Np. metric='win_rate' albo metric='ci_low'.
-    """
-    sorted_rows = sorted(rows, key=lambda row: int(row["step"]))
+def parse_value(value: str) -> str | int | float:
+    value = value.strip()
 
-    for row in sorted_rows:
-        step = int(row["step"])
-        value = float(row[metric])
+    if value == "":
+        return value
 
-        if value >= threshold:
+    try:
+        return int(value)
+    except ValueError:
+        pass
+
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def load_results(csv_path: str | Path) -> list[Result]:
+    results: list[Result] = []
+
+    with open(csv_path, mode="r", encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            parsed_row: Result = {
+                key: parse_value(value)
+                for key, value in row.items()
+            }
+
+            results.append(parsed_row)
+
+    return results
+
+
+def group_results(results: list[Result]) -> GroupedResults:
+    grouped: GroupedResults = defaultdict(list)
+
+    for result in results:
+        algo = str(result["algo"])
+        seed = int(result["seed"])
+
+        grouped[(algo, seed)].append(result)
+
+    return dict(grouped)
+
+
+def group_summary(summary: list[SummaryRow]) -> dict[str, list[SummaryRow]]:
+    grouped: dict[str, list[SummaryRow]] = defaultdict(list)
+
+    for row in summary:
+        algo = str(row["algo"])
+
+        grouped[algo].append(row)
+
+    return dict(grouped)
+
+
+def first_step_at_or_above(results: list[Result], metric: str, threshold: float,) -> int | None:
+    sorted_results = sorted(results, key=lambda result: int(result["step"]))
+
+    for result in sorted_results:
+        step = int(result["step"])
+        if float(result[metric]) >= threshold:
             return step
 
     return None
 
 
-def interpolated_step_at_threshold(
-    rows: list[Row],
-    metric: str = "win_rate",
-    threshold: float = 0.9,
-) -> float | None:
-    """
-    Przybliża dokładny step, w którym metryka przekracza threshold,
-    używając interpolacji liniowej między dwoma sąsiednimi punktami.
+def interpolated_step_at_threshold(results: list[Result],threshold: float,) -> float | None:
+    sorted_results = sorted(results, key=lambda result: int(result["step"]))
 
-    Domyślnie interpoluje po win_rate.
-    """
-    sorted_rows = sorted(rows, key=lambda row: int(row["step"]))
-
-    if not sorted_rows:
+    if not sorted_results:
         return None
 
-    first_step = int(sorted_rows[0]["step"])
-    first_value = float(sorted_rows[0][metric])
+    first_step = int(sorted_results[0]["step"])
+    first_value = float(sorted_results[0]["win_rate"])
 
     if first_value >= threshold:
         return float(first_step)
 
-    for previous_row, current_row in zip(sorted_rows, sorted_rows[1:]):
-        previous_step = int(previous_row["step"])
-        current_step = int(current_row["step"])
+    for previous_result, current_result in zip(sorted_results, sorted_results[1:]):
+        previous_step = int(previous_result["step"])
+        current_step = int(current_result["step"])
 
-        previous_value = float(previous_row[metric])
-        current_value = float(current_row[metric])
+        previous_value = float(previous_result["win_rate"])
+        current_value = float(current_result["win_rate"])
 
         if previous_value < threshold <= current_value:
             if current_value == previous_value:
@@ -69,28 +121,51 @@ def interpolated_step_at_threshold(
     return None
 
 
-def build_threshold_summary(
-    grouped_results: dict[GroupKey, list[Row]],
-    threshold: float = 0.9,
-) -> list[ThresholdSummaryRow]:
-    summary: list[ThresholdSummaryRow] = []
+def calc_algo_avg(summary: list[SummaryRow]) -> list[SummaryRow]:
+    grouped_summary: dict[str, list[SummaryRow]] = group_summary(summary)
 
-    for (algo, seed), rows in sorted(grouped_results.items()):
+    for algo, algo_summary in grouped_summary.items():
+        sum_win_rate = 0
+        sum_ci_low = 0
+        sum_interpolated = 0
+        count = 0
+        for row in algo_summary:
+            sum_win_rate += row["step_win_rate_ge_0_9"]
+            sum_ci_low += row["step_ci_low_ge_0_9"]
+            sum_interpolated += row["interpolated_step_win_rate_0_9"]
+            count += 1
+
+        summary.append(
+            {
+                "algo": algo,
+                "seed": "avg",
+                "step_win_rate_ge_0_9": sum_win_rate / count,
+                "step_ci_low_ge_0_9": sum_ci_low / count,
+                "interpolated_step_win_rate_0_9": sum_interpolated / count,
+            }
+        )
+
+    return summary
+
+
+def build_threshold_summary(grouped_results: GroupedResults,threshold: float,) -> list[SummaryRow]:
+    summary: list[SummaryRow] = []
+
+    for (algo, seed), results in sorted(grouped_results.items()):
         step_win_rate = first_step_at_or_above(
-            rows=rows,
+            results=results,
             metric="win_rate",
             threshold=threshold,
         )
 
         step_ci_low = first_step_at_or_above(
-            rows=rows,
+            results=results,
             metric="ci_low",
             threshold=threshold,
         )
 
         interpolated_step_win_rate = interpolated_step_at_threshold(
-            rows=rows,
-            metric="win_rate",
+            results=results,
             threshold=threshold,
         )
 
@@ -104,26 +179,12 @@ def build_threshold_summary(
             }
         )
 
+    summary = calc_algo_avg(summary)
+
     return summary
 
 
-def format_optional_int(value: int | None) -> str:
-    if value is None:
-        return "-"
-
-    return str(value)
-
-
-def format_optional_float(value: float | None, decimals: int = 2) -> str:
-    if value is None:
-        return "-"
-
-    return f"{value:.{decimals}f}"
-
-
-def print_threshold_summary_table(
-    summary: list[ThresholdSummaryRow],
-) -> None:
+def print_threshold_summary_table(summary: list[SummaryRow],) -> None:
     headers = [
         "algo",
         "seed",
@@ -139,9 +200,9 @@ def print_threshold_summary_table(
             [
                 str(row["algo"]),
                 str(row["seed"]),
-                format_optional_int(row["step_win_rate_ge_0_9"]),  # type: ignore[arg-type]
-                format_optional_int(row["step_ci_low_ge_0_9"]),  # type: ignore[arg-type]
-                format_optional_float(row["interpolated_step_win_rate_0_9"]),  # type: ignore[arg-type]
+                str(row["step_win_rate_ge_0_9"]),
+                str(row["step_ci_low_ge_0_9"]),
+                str(row["interpolated_step_win_rate_0_9"]),
             ]
         )
 
@@ -171,19 +232,34 @@ def print_threshold_summary_table(
             )
         )
 
+
+def save_summary(summary: list[SummaryRow], summary_config) -> None:
+    results_path = Path(summary_config["results_dir"]) / summary_config["summary_file"]
+
+    fieldnames = list(summary[0].keys())
+
+    with results_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(summary)
+
+
 def main() -> None:
     args = parse_args()
+    config = read_config(args.config)
 
-    results: list[Row] = load_results_csv(args.csv_path)
+    results: list[Result] = load_results(Path(config["results_dir"]) / config["results_file"])
 
     grouped_results = group_results(results)
 
     summary = build_threshold_summary(
         grouped_results=grouped_results,
-        threshold=0.9,
+        threshold=float(config["threshold"]),
     )
 
     print_threshold_summary_table(summary)
+
+    save_summary(summary, config)
 
 
 if __name__ == "__main__":
