@@ -121,7 +121,7 @@ def interpolated_step_at_threshold(results: list[Result],threshold: float,) -> f
     return None
 
 
-def calc_algo_avg(summary: list[SummaryRow]) -> list[SummaryRow]:
+def calc_algo_avg(summary: list[SummaryRow], threshold: float) -> list[SummaryRow]:
     grouped_summary: dict[str, list[SummaryRow]] = group_summary(summary)
 
     for algo, algo_summary in grouped_summary.items():
@@ -131,25 +131,25 @@ def calc_algo_avg(summary: list[SummaryRow]) -> list[SummaryRow]:
         count = 0
         for row in algo_summary:
             if row["seed"] != "step_avg":
-                sum_win_rate += row["step_win_rate_ge_0_9"]
-                sum_ci_low += row["step_ci_low_ge_0_9"]
-                sum_interpolated += row["interpolated_step_win_rate_0_9"]
+                sum_win_rate += row[f"step_win_rate_ge_{threshold}"]
+                sum_ci_low += row[f"step_ci_low_ge_{threshold}"]
+                sum_interpolated += row[f"interpolated_step_win_rate_{threshold}"]
                 count += 1
 
         summary.append(
             {
                 "algo": algo,
                 "seed": "avg",
-                "step_win_rate_ge_0_9": sum_win_rate / count,
-                "step_ci_low_ge_0_9": sum_ci_low / count,
-                "interpolated_step_win_rate_0_9": sum_interpolated / count,
+                f"step_win_rate_ge_{threshold}": sum_win_rate / count,
+                f"step_ci_low_ge_{threshold}": sum_ci_low / count,
+                f"interpolated_step_win_rate_{threshold}": sum_interpolated / count,
             }
         )
 
     return summary
 
 
-def build_threshold_summary(grouped_results: GroupedResults,threshold: float,) -> list[SummaryRow]:
+def build_threshold_summary(grouped_results: GroupedResults, threshold: float,) -> list[SummaryRow]:
     summary: list[SummaryRow] = []
 
     for (algo, seed), results in grouped_results.items():
@@ -174,13 +174,13 @@ def build_threshold_summary(grouped_results: GroupedResults,threshold: float,) -
             {
                 "algo": algo,
                 "seed": seed,
-                "step_win_rate_ge_0_9": step_win_rate,
-                "step_ci_low_ge_0_9": step_ci_low,
-                "interpolated_step_win_rate_0_9": interpolated_step_win_rate,
+                f"step_win_rate_ge_{threshold}": step_win_rate,
+                f"step_ci_low_ge_{threshold}": step_ci_low,
+                f"interpolated_step_win_rate_{threshold}": interpolated_step_win_rate,
             }
         )
 
-    summary = calc_algo_avg(summary)
+    summary = calc_algo_avg(summary, threshold=threshold)
 
     return summary
 
