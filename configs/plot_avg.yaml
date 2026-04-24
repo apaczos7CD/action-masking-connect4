@@ -3,4 +3,4 @@ results_file: "evals.csv"
 plot_file: "plot_avg.png"
 show_wilson_interval: True
 show_algo: ["ppo","maskable_ppo"]
-show_seeds: ["avg"]
+show_seeds: ["step_avg"]

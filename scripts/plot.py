@@ -21,7 +21,7 @@ def parse_args():
 def plot_results(grouped_results: GroupedResults, config) -> None:
     plt.figure(figsize=(12, 7))
 
-    for (algo, seed), rows in sorted(grouped_results.items()):
+    for (algo, seed), rows in grouped_results.items():
         if algo in config["show_algo"] and seed in config["show_seeds"]:
             rows = sorted(rows, key=lambda row: int(row["step"]))
 

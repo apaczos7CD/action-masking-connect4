@@ -59,7 +59,7 @@ def group_results_by_algo_and_seed(results: list[Result]) -> GroupedResults:
 
     for result in results:
         algo = str(result["algo"])
-        seed = int(result["seed"])
+        seed = result["seed"]
 
         grouped[(algo, seed)].append(result)
 
@@ -152,7 +152,7 @@ def calc_algo_avg(summary: list[SummaryRow]) -> list[SummaryRow]:
 def build_threshold_summary(grouped_results: GroupedResults,threshold: float,) -> list[SummaryRow]:
     summary: list[SummaryRow] = []
 
-    for (algo, seed), results in sorted(grouped_results.items()):
+    for (algo, seed), results in grouped_results.items():
         step_win_rate = first_step_at_or_above(
             results=results,
             metric="win_rate",
