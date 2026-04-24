@@ -68,7 +68,7 @@ def plot_results(grouped_results: GroupedResults, config) -> None:
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(Path(config["results_dir"]) / config["plot_file"], dpi=300, bbox_inches="tight")
 
 
 def main() -> None:

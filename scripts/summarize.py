@@ -185,26 +185,15 @@ def build_threshold_summary(grouped_results: GroupedResults,threshold: float,) -
 
 
 def print_threshold_summary_table(summary: list[SummaryRow],) -> None:
-    headers = [
-        "algo",
-        "seed",
-        "min step win_rate >= 0.9",
-        "min step ci_low >= 0.9",
-        "interpolated step win_rate = 0.9",
-    ]
+    headers = list(summary[0].keys())
 
     rows_as_strings: list[list[str]] = []
 
     for row in summary:
-        rows_as_strings.append(
-            [
-                str(row["algo"]),
-                str(row["seed"]),
-                str(row["step_win_rate_ge_0_9"]),
-                str(row["step_ci_low_ge_0_9"]),
-                str(row["interpolated_step_win_rate_0_9"]),
-            ]
-        )
+        row_elem: list[str] = []
+        for key in headers:
+            row_elem.append(str(row[key]))
+        rows_as_strings.append(row_elem)
 
     column_widths = [
         max(len(headers[column_index]), *(len(row[column_index]) for row in rows_as_strings))
@@ -248,8 +237,7 @@ def main() -> None:
     args = parse_args()
     config = read_config(args.config)
 
-    results: list[Result] = load_results(Path(config["results_dir"]) / config["results_file"])
-
+    results = load_results(Path(config["results_dir"]) / config["results_file"])
     grouped_results = group_results(results)
 
     summary = build_threshold_summary(
@@ -258,7 +246,6 @@ def main() -> None:
     )
 
     print_threshold_summary_table(summary)
-
     save_summary(summary, config)
 
 
