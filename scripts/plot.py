@@ -1,92 +1,122 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+import argparse
+import csv
+from collections import defaultdict
 from pathlib import Path
 
-import argparse
+import matplotlib.pyplot as plt
+
+
+Row = dict[str, str | int | float]
+GroupKey = tuple[str, int]
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Print plots for train process for both algorithms."
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--file1",
-        type=str,
-        default="eval_maskable_ppo_seed0_evalseed0.csv",
-        help="File 1 path.",
-    )
-    parser.add_argument(
-        "--file2",
-        type=str,
-        default="eval_ppo_seed0_evalseed0.csv",
-        help="File 2 path.",
+        "--csv_path",
+        type=Path,
+        default=r"results\evals.csv",
+        help="Ścieżka do pliku CSV z wynikami ewaluacji.",
     )
     return parser.parse_args()
 
-args = parse_args()
 
-# Katalog główny projektu
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = PROJECT_ROOT / "results"
+def parse_value(value: str) -> str | int | float:
+    value = value.strip()
 
-# Nazwy plików CSV
-file_1 = RESULTS_DIR / args.file1
-file_2 = RESULTS_DIR / args.file2
+    if value == "":
+        return value
 
-# Wczytanie danych
-df1 = pd.read_csv(file_1)
-df2 = pd.read_csv(file_2)
+    try:
+        return int(value)
+    except ValueError:
+        pass
 
-# Połączenie w jedną ramkę
-df = pd.concat([df1, df2], ignore_index=True)
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
-# Rysowanie wykresu
-plt.figure(figsize=(10, 6))
 
-for algo_name, group in df.groupby("algo"):
-    group = group.sort_values(by="step")
+def load_results_csv(csv_path: str | Path) -> list[Row]:
+    results: list[Row] = []
 
-    # Główna linia win_rate
-    line, = plt.plot(
-        group["step"],
-        group["win_rate"],
-        marker="o",
-        label=algo_name
-    )
+    with open(csv_path, mode="r", encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
 
-    color = line.get_color()
+        for row in reader:
+            parsed_row: Row = {
+                key: parse_value(value)
+                for key, value in row.items()
+            }
 
-    # Linie CI
-    plt.plot(
-        group["step"],
-        group["ci_low"],
-        linestyle="--",
-        linewidth=1,
-        color=color,
-        alpha=0.8
-    )
+            results.append(parsed_row)
 
-    plt.plot(
-        group["step"],
-        group["ci_high"],
-        linestyle="--",
-        linewidth=1,
-        color=color,
-        alpha=0.8
-    )
+    return results
 
-    # Wypełnienie między ci_low i ci_high
-    plt.fill_between(
-        group["step"],
-        group["ci_low"],
-        group["ci_high"],
-        color=color,
-        alpha=0.15
-    )
 
-plt.xlabel("step")
-plt.ylabel("win_rate")
-plt.title("win_rate vs step")
-plt.legend(title="algo")
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+def group_results(results: list[Row]) -> dict[GroupKey, list[Row]]:
+    grouped: dict[GroupKey, list[Row]] = defaultdict(list)
+
+    for row in results:
+        algo = str(row["algo"])
+        seed = int(row["seed"])
+
+        grouped[(algo, seed)].append(row)
+
+    return dict(grouped)
+
+
+def plot_grouped_results(grouped_results: dict[GroupKey, list[Row]]) -> None:
+    plt.figure(figsize=(12, 7))
+
+    for (algo, seed), rows in sorted(grouped_results.items()):
+        rows = sorted(rows, key=lambda row: int(row["step"]))
+
+        steps = [int(row["step"]) for row in rows]
+        win_rates = [float(row["win_rate"]) for row in rows]
+        ci_lows = [float(row["ci_low"]) for row in rows]
+        ci_highs = [float(row["ci_high"]) for row in rows]
+
+        y_errors = [
+            [
+                win_rate - ci_low
+                for win_rate, ci_low in zip(win_rates, ci_lows)
+            ],
+            [
+                ci_high - win_rate
+                for win_rate, ci_high in zip(win_rates, ci_highs)
+            ],
+        ]
+
+        plt.errorbar(
+            steps,
+            win_rates,
+            #yerr=y_errors if 1==0 else 0,
+            fmt=".",
+            linestyle="-",
+            capsize=4,
+            label=f"{algo}, seed={seed}",
+        )
+
+    plt.xlabel("step")
+    plt.ylabel("win_rate")
+    plt.title("Win rate vs step dla wszystkich przebiegów")
+    plt.ylim(0.5, 1.05)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def main() -> None:
+    args = parse_args()
+
+    results: list[Row] = load_results_csv(args.csv_path)
+
+    grouped_results = group_results(results)
+
+    plot_grouped_results(grouped_results)
+
+
+if __name__ == "__main__":
+    main()
