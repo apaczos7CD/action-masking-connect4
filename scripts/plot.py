@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from scripts.train import read_config
 from scripts.eval import Result
-from scripts.summarize import load_results, group_results, GroupedResults
+from scripts.summarize import load_results, group_results_by_algo_and_seed, GroupedResults
 
 
 def parse_args():
@@ -77,7 +77,7 @@ def main() -> None:
 
     results: list[Result] = load_results(Path(config["results_dir"]) / config["results_file"])
 
-    grouped_results = group_results(results)
+    grouped_results = group_results_by_algo_and_seed(results)
 
     plot_results(grouped_results, config)
 

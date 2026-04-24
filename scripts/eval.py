@@ -7,6 +7,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
 import argparse
+from collections import defaultdict
+
 from scripts.train import make_env, read_config
 
 Result = dict[str, str | int | float]
@@ -84,6 +86,45 @@ def load_model(model_path: str, algo: str, vec_env: DummyVecEnv):
     raise ValueError(f"Unsupported algo: {algo}")
 
 
+def group_results_by_algo_and_step(results: list[Result]) -> dict[tuple[str, int], list[Result]]:
+    grouped: dict[tuple[str, int], list[Result]] = defaultdict(list)
+
+    for result in results:
+        algo = str(result["algo"])
+        step = int(result["step"])
+
+        grouped[(algo, step)].append(result)
+
+    return dict(grouped)
+
+
+def calc_step_avg(results: list[Result]) -> list[Result]:
+    grouped_results: dict[tuple[str, int], list[Result]] = group_results_by_algo_and_step(results)
+
+    for (algo, step), step_results in grouped_results.items():
+        sum_wins = 0
+        sum_games = 0
+        for result in step_results:
+            sum_wins += result["wins"]
+            sum_games += result["games"]
+
+        ci_low, ci_high = wilson_interval(sum_wins, sum_games)
+        win_rate = sum_wins / sum_games if sum_games > 0 else 0.0
+
+        results.append({
+            "algo": algo,
+            "step": step,
+            "seed": "step_avg",
+            "games": sum_games,
+            "wins": sum_wins,
+            "win_rate": win_rate,
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+        })
+
+    return results
+
+
 def run_n_games(model, vec_env: DummyVecEnv, algo: str, n_games: int) -> tuple[int, int]:
     wins = 0
     games = 0
@@ -159,6 +200,8 @@ def run_models(model_paths: list[tuple[str, int, int, Path]], run_param) -> list
 
         print(f"wins={wins}, games={games}")
         print(f"win_rate={win_rate}, ci_low={ci_low}, ci_high={ci_high}")
+
+    results = calc_step_avg(results)
 
     return results
 

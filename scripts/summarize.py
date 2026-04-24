@@ -54,7 +54,7 @@ def load_results(csv_path: str | Path) -> list[Result]:
     return results
 
 
-def group_results(results: list[Result]) -> GroupedResults:
+def group_results_by_algo_and_seed(results: list[Result]) -> GroupedResults:
     grouped: GroupedResults = defaultdict(list)
 
     for result in results:
@@ -130,10 +130,11 @@ def calc_algo_avg(summary: list[SummaryRow]) -> list[SummaryRow]:
         sum_interpolated = 0
         count = 0
         for row in algo_summary:
-            sum_win_rate += row["step_win_rate_ge_0_9"]
-            sum_ci_low += row["step_ci_low_ge_0_9"]
-            sum_interpolated += row["interpolated_step_win_rate_0_9"]
-            count += 1
+            if row["seed"] != "step_avg":
+                sum_win_rate += row["step_win_rate_ge_0_9"]
+                sum_ci_low += row["step_ci_low_ge_0_9"]
+                sum_interpolated += row["interpolated_step_win_rate_0_9"]
+                count += 1
 
         summary.append(
             {
@@ -238,7 +239,7 @@ def main() -> None:
     config = read_config(args.config)
 
     results = load_results(Path(config["results_dir"]) / config["results_file"])
-    grouped_results = group_results(results)
+    grouped_results = group_results_by_algo_and_seed(results)
 
     summary = build_threshold_summary(
         grouped_results=grouped_results,
