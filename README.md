@@ -52,52 +52,50 @@ W projekcie wykorzystywany jest wrapper przekształcający środowisko typu AEC 
 Struktura projektu:
 
 ```text
-.
+RL_ppo_action_masking_in_connect_4
+│
 ├── configs/
 │   ├── train_ppo.yaml
-│   ├── train_maskableppo.yaml
-│   └── eval.yaml
+│   ├── train_maskable_ppo.yaml
+│   ├── eval.yaml
+│   ├── summarize.yaml
+│   ├── plot.yaml
+│   └── plot_avg.yaml
 │
 ├── envs/
 │   └── connect4_wrapper.py
 │
 ├── scripts/
 │   ├── train.py
-│   ├── evaluate.py
+│   ├── eval.py
+│   ├── summarize.py
 │   └── plot.py
 │
 ├── results/
-│   └── .gitkeep
 │
-├── models/
-│   └── .gitkeep
+├── checkpoints/
 │
 ├── logs/
-│   └── .gitkeep
 │
-├── plots/
-│   └── .gitkeep
-│
-├── requirements.txt
 ├── requirements_exact.txt
 ├── reproduce.sh
 └── README.md
 ```
 
-Opis katalogów:
+Opis katalogu głównego:
 
-| Katalog / plik | Opis |
-|---|---|
-| `configs/` | Pliki konfiguracyjne YAML dla treningu i ewaluacji |
-| `envs/` | Implementacja wrappera środowiska Connect Four |
-| `scripts/` | Skrypty do treningu, ewaluacji i generowania wykresów |
-| `results/` | Wyniki ewaluacji w formacie CSV |
-| `models/` | Zapisane modele i punkty kontrolne |
-| `logs/` | Logi treningu, np. TensorBoard |
-| `plots/` | Wygenerowane wykresy |
-| `requirements.txt` | Lista podstawowych zależności |
-| `requirements_exact.txt` | Dokładne wersje bibliotek użyte w eksperymencie |
-| `reproduce.sh` | Skrypt do odtworzenia eksperymentu |
+| Katalog / plik           | Opis                                                                                                   |
+|--------------------------|--------------------------------------------------------------------------------------------------------|
+| `requirements_exact.txt` | Dokładne wersje bibliotek użyte w eksperymencie                                                        |
+| `reproduce.sh`           | Skrypt do odtworzenia eksperymentu                                                                     |
+| `envs/`                  | Środowisko uczenia ze wzmocnieniem - klasa OneAgentVsRandomGym umieszczona w pliku connect4_wrapper.py |
+| `scripts/`               | Skrypty do treningu, ewaluacji i generowania wykresów                                                  |
+| `configs/`               | Pliki konfiguracyjne YAML dla skryptów                                                                 |
+| `results/`               | Wyniki ewaluacji w formacie CSV, wykresy w formacie png                                                |
+| `checkpoints/`           | Zapisane modele i punkty kontrolne                                                                     |
+| `logs/`                  | Logi treningu (TensorBoard)                                                                            | 
+
+
 
 ---
 
@@ -108,7 +106,7 @@ Projekt wymaga środowiska Python oraz bibliotek związanych z uczeniem ze wzmoc
 Zalecana wersja Pythona:
 
 ```text
-Python 3.11
+Python 3.13
 ```
 
 Główne biblioteki:
