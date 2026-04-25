@@ -1,4 +1,4 @@
 results_dir: "results"
 results_file: "evals.csv"
 summary_file: "summary.csv"
-threshold: 0.9
+threshold: 0.8
