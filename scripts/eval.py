@@ -61,7 +61,7 @@ def find_model_files(models_dir: str) -> list[tuple[str, int, int, Path]]:
     return matched
 
 
-def wilson_interval(wins: int, games: int, z: float = 1.959963984540054) -> tuple[float, float]:
+def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
     if games == 0:
         return 0.0, 0.0
 

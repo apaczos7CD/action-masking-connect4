@@ -38,5 +38,6 @@ python -m scripts.summarize --config "configs/summarize.yaml"
 
 echo "Generating plots..."
 python -m scripts.plot --config "configs/plot.yaml"
+python -m scripts.plot --config "configs/plot_avg.yaml"
 
 echo "Reproduction finished successfully."
