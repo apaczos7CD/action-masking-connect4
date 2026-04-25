@@ -139,7 +139,7 @@ def calc_algo_avg(summary: list[SummaryRow], threshold: float) -> list[SummaryRo
         summary.append(
             {
                 "algo": algo,
-                "seed": "avg",
+                "seed": "seeds_avg",
                 f"step_win_rate_ge_{threshold}": sum_win_rate / count,
                 f"step_ci_low_ge_{threshold}": sum_ci_low / count,
                 f"interpolated_step_win_rate_{threshold}": sum_interpolated / count,
