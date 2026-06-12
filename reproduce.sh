@@ -31,7 +31,7 @@ python -m scripts.train --config "configs/train_ppo.yaml"
 python -m scripts.train --config "configs/train_maskable_ppo.yaml"
 
 echo "Evaluating checkpoints..."
-python -m scripts.evaluate --config "configs/eval.yaml"
+python -m scripts.eval --config "configs/eval.yaml"
 
 echo "Summarize..."
 python -m scripts.summarize --config "configs/summarize.yaml"
