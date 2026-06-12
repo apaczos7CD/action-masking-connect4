@@ -73,6 +73,8 @@ if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
 Write-Host "Creating output directories..."
 New-Item -ItemType Directory -Force -Path "results", "checkpoints", "logs" | Out-Null
 
+$totalTime = [System.Diagnostics.Stopwatch]::StartNew()
+
 Write-Host "Training models..."
 python -m scripts.train --config "configs/train_ppo.yaml"
 if ($LASTEXITCODE -ne 0) { throw "Training PPO failed." }
@@ -93,4 +95,7 @@ if ($LASTEXITCODE -ne 0) { throw "Plot generation failed for configs/plot.yaml."
 python -m scripts.plot --config "configs/plot_avg.yaml"
 if ($LASTEXITCODE -ne 0) { throw "Plot generation failed for configs/plot_avg.yaml." }
 
+$totalTime.Stop()
+
 Write-Host "Reproduction finished successfully."
+Write-Host "Total Python scripts time: $($totalTime.Elapsed.ToString())"
