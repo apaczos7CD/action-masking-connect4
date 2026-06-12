@@ -80,7 +80,7 @@ python -m scripts.train --config "configs/train_maskable_ppo.yaml"
 if ($LASTEXITCODE -ne 0) { throw "Training MaskablePPO failed." }
 
 Write-Host "Evaluating checkpoints..."
-python -m scripts.evaluate --config "configs/eval.yaml"
+python -m scripts.eval --config "configs/eval.yaml"
 if ($LASTEXITCODE -ne 0) { throw "Evaluation failed." }
 
 Write-Host "Summarizing results..."
